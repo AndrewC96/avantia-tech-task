@@ -4,6 +4,7 @@ from fuzzy_search import FuzzySearcher
 from flask import Flask, request, jsonify, render_template
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
+from config import FUZZY_SEARCH_THRESHOLD
 
 app = Flask(__name__)
 
@@ -29,8 +30,8 @@ for attempt in range(max_retries):
             print("Failed to connect to MongoDB after all retries")
             raise
 
-# Initialize searcher with lower threshold
-searcher = FuzzySearcher(threshold=40)
+# Initialize searcher (no threshold parameter)
+searcher = FuzzySearcher()
 
 @app.route('/')
 def home():
@@ -48,38 +49,44 @@ def search():
         print(f"\n=== Search Request ===")
         print(f"Parameters: name='{name}', category='{category}', description='{description}'")
         
-        # Test if we can get any data at all
-        total_count = prizes.count_documents({})
-        print(f"Total documents in database: {total_count}")
-        
-        # Get a sample document to verify structure
-        sample = prizes.find_one({})
-        print(f"Sample document structure: {sample}")
-        
         results = list(prizes.find({}))
-        print(f"Initial results count: {len(results)}")
-        
         for result in results:
             result['_id'] = str(result['_id'])
         
         filtered_results = []
+        perfect_matches = []
+        
         for prize in results:
-            should_include = False
-            
             if name and 'laureates' in prize:
+                matching_prize = prize.copy()
+                matching_laureates = []
+                perfect_laureates = []
+                
                 for laureate in prize['laureates']:
                     full_name = f"{laureate.get('firstname', '')} {laureate.get('surname', '')}".lower()
                     similarity = searcher.calculate_similarity(name, full_name)
                     print(f"Checking name: '{name}' against '{full_name}' - Score: {similarity}")
-                    if similarity > 0.40:
-                        should_include = True
-                        break
+                    
+                    if similarity == 1.0:
+                        perfect_laureates.append(laureate)
+                    elif similarity > FUZZY_SEARCH_THRESHOLD / 100:
+                        matching_laureates.append(laureate)
+                
+                if perfect_laureates:
+                    matching_prize['laureates'] = perfect_laureates
+                    perfect_matches.append(matching_prize)
+                elif matching_laureates:
+                    matching_prize['laureates'] = matching_laureates
+                    filtered_results.append(matching_prize)
             
-            if should_include or not any([name, category, description]):
+            elif not any([name, category, description]):
                 filtered_results.append(prize)
         
-        print(f"Final filtered results: {len(filtered_results)}")
-        return jsonify(filtered_results)
+        # Return perfect matches if they exist, otherwise return fuzzy matches
+        final_results = perfect_matches if perfect_matches else filtered_results
+        print(f"Final filtered results count: {len(final_results)}")
+        
+        return jsonify(final_results)
         
     except Exception as e:
         import traceback
