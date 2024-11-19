@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nobel Prize Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .search-form {
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 8px;
+            margin: 5px;
+        }
+        .results {
+            margin-top: 20px;
+        }
+        .prize {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .laureates {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .laureate {
+            width: 50%;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-left: 3px solid #ddd;
+        }
+        .motivation {
+            margin: 5px 0;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Nobel Prize Search</h1>
+    <div class="search-form">
+        <input type="text" id="name" placeholder="Laureate Name">
+        <input type="text" id="category" placeholder="Category">
+        <input type="text" id="description" placeholder="Description">
+        <button onclick="search()">Search</button>
+    </div>
+    <div id="results" class="results"></div>
+
+    <script>
+        function search() {
+            const name = document.getElementById('name').value;
+            const category = document.getElementById('category').value;
+            const description = document.getElementById('description').value;
+
+            const params = new URLSearchParams();
+            if (name) params.append('name', name);
+            if (category) params.append('category', category);
+            if (description) params.append('description', description);
+
+            fetch(`/search?${params.toString()}`)
+                .then(response => {
+                    console.log("Response status:", response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Received data:", data);
+                    const resultsDiv = document.getElementById('results');
+                    resultsDiv.innerHTML = '';
+                    
+                    if (!data || data.length === 0) {
+                        resultsDiv.innerHTML = '<p>No results found</p>';
+                        return;
+                    }
+                    
+                    data.forEach(prize => {
+                        const prizeDiv = document.createElement('div');
+                        prizeDiv.className = 'prize';
+                        
+                        prizeDiv.innerHTML = `
+                            <h3>${prize.year} - ${prize.category}</h3>
+                            <div class="laureates">
+                                ${prize.laureates ? prize.laureates.map(laureate => `
+                                    <div class="laureate">
+                                        <strong>${laureate.firstname || ''} ${laureate.surname || ''}</strong>
+                                        <p class="motivation">${laureate.motivation || 'No motivation available'}</p>
+                                    </div>
+                                `).join('') : 'No laureates available'}
+                            </div>
+                        `;
+                        resultsDiv.appendChild(prizeDiv);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('results').innerHTML = 
+                        `<p>Error fetching results: ${error.message}</p>`;
+                });
+        }
+    </script>
+</body>
+</html>
