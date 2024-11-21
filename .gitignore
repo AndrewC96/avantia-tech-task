@@ -69,11 +69,6 @@ ENV
 .idea
 .vscode
 
-# Docker
-.docker
-Dockerfile
-docker-compose.yml
-
 # Project specific
 README.md
 LICENSE

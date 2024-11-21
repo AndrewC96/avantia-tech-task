@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: nobel_mongodb
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=nobel_db
+      - MONGO_USER=${MONGO_USER}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - nobel_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@localhost:27017/admin --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  app:
+    build: .
+    container_name: nobel_app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_USER=${MONGO_USER}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - MONGO_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/nobel_db?authSource=admin
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - nobel_network
+    healthcheck:
+      test: curl --fail http://localhost:5000/ || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  nobel_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
